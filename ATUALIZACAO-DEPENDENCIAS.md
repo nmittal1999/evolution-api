@@ -80,8 +80,21 @@ Smoke test de envio real (a partir do Tier 0):
 
 ## Progresso
 
-- [ ] Tier 0 — Baileys rc13 + remoção do patch
-- [ ] Tier 1 — bumps seguros
-- [ ] Tier 2 — majors baixo/médio risco
-- [ ] Tier 3 — majors alto risco
-- [ ] Tier 4 — Prisma 7 (spike opcional)
+- [x] **Tier 0** — Baileys `rc.9 → rc13` + remoção do patch obsoleto (waveform já upstream). tsc/build limpos.
+- [x] **Tier 1** — bumps seguros (axios 1.17, sentry, pg, socket.io, multer 2.1, etc). Fix: cast `as string` em `content-type` (axios 1.17 endureceu `AxiosHeaderValue`).
+- [x] **Tier 2** — uuid 14, dotenv 17, node-cron 4, i18next 26, class-validator 0.15, mime-types 3, amqplib 2 (+fix de `port:Number`), cuid2 3, pusher 5.3, **undici 8**.
+- [x] **Tier 3** — ESLint 10 (flat config, `import-x`), Express 5 (rotas wildcard + casts `req.params`), OpenAI 6 (`runs.retrieve/submitToolOutputs`), Redis 6 (casts RESP3), TypeScript 6 (`ignoreDeprecations`).
+- [~] **Tier 4** — Prisma mantido em **6.19.x** (estável). Prisma 7 NÃO aplicado (ESM-only + driver adapters incompatíveis com CommonJS/multi-provider). Documentado como spike opcional.
+
+### Mantidos na faixa do peer do Baileys rc13 (não subir sem o Baileys subir junto)
+`audio-decode@2`, `link-preview-js@3`, `pino@9`, `jimp@1.6` — peers `peerOptional` do Baileys; subir gera ERESOLVE e risco de quebrar áudio/preview internos.
+
+### Adiados (exigiriam migração de `moduleResolution`, alto risco de quebrar imports)
+`https-proxy-agent@9`, `socks-proxy-agent@10` — majors ESM-only com `exports` que o `moduleResolution: node10` atual não resolve. Mantidos em 7/8. Migrar junto com a modernização de módulos (TS 7 / node16|bundler).
+
+### Notas operacionais
+- Após `rm -rf node_modules` (instalação limpa), rodar **`npm run db:generate`** antes do build — o `postinstall` só roda `patch-package`, não gera o Prisma Client.
+- **Segurança**: `npm audit` caiu de **57 → 9**. As 9 restantes são travadas por upstream (`axios` aninhado do `@figuro/chatwoot-sdk`; `link-preview-js@3` exigido pelo Baileys) ou dev-only via `commitizen` (`lodash`/`tmp`). `npm audit fix --force` não aplicado para não quebrar.
+
+### Pendente (requer ação do usuário)
+- [ ] **Smoke test de envio real**: conectar instância via QR e enviar `sendButtons` (5 tipos), `sendList` e `sendCarousel` para o número de teste; validar render no WhatsApp Web/Desktop + mobile e o áudio PTT.
