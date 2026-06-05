@@ -92,6 +92,16 @@ Smoke test de envio real (a partir do Tier 0):
 ### Adiados (exigiriam migração de `moduleResolution`, alto risco de quebrar imports)
 `https-proxy-agent@9`, `socks-proxy-agent@10` — majors ESM-only com `exports` que o `moduleResolution: node10` atual não resolve. Mantidos em 7/8. Migrar junto com a modernização de módulos (TS 7 / node16|bundler).
 
+### Correção crítica de runtime — `whatsapp-rust-bridge` (override)
+O Baileys rc13 passou a depender de `whatsapp-rust-bridge@0.5.4`, cujo `package.json` é ESM-only
+(`exports` só com `import`). Em contexto CommonJS (tsx/`require`) o app **não sobe**
+(`ERR_PACKAGE_PATH_NOT_EXPORTED`). A versão **0.5.5** adiciona a condição `require`. Fixado via:
+```json
+"overrides": { "whatsapp-rust-bridge": "0.5.5" }
+```
+Validado: `require('whatsapp-rust-bridge')` resolve e o `dev:server` inicializa toda a stack
+(RedisCache, CacheService, WA MODULE, Prisma) até o ponto de conectar a infraestrutura.
+
 ### Notas operacionais
 - Após `rm -rf node_modules` (instalação limpa), rodar **`npm run db:generate`** antes do build — o `postinstall` só roda `patch-package`, não gera o Prisma Client.
 - **Segurança**: `npm audit` caiu de **57 → 9**. As 9 restantes são travadas por upstream (`axios` aninhado do `@figuro/chatwoot-sdk`; `link-preview-js@3` exigido pelo Baileys) ou dev-only via `commitizen` (`lodash`/`tmp`). `npm audit fix --force` não aplicado para não quebrar.

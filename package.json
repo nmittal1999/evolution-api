@@ -65,6 +65,9 @@
       "path": "cz-conventional-changelog"
     }
   },
+  "overrides": {
+    "whatsapp-rust-bridge": "0.5.5"
+  },
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
     "@aws-sdk/client-sqs": "^3.1063.0",
