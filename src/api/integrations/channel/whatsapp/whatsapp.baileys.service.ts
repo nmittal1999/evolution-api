@@ -90,7 +90,6 @@ import { sendTelemetry } from '@utils/sendTelemetry';
 import useMultiFileAuthStatePrisma from '@utils/use-multi-file-auth-state-prisma';
 import { AuthStateProvider } from '@utils/use-multi-file-auth-state-provider-files';
 import { useMultiFileAuthStateRedisDb } from '@utils/use-multi-file-auth-state-redis-db';
-import audioDecode from 'audio-decode';
 import axios from 'axios';
 import makeWASocket, {
   AnyMessageContent,
@@ -3465,58 +3464,6 @@ export class BaileysStartupService extends ChannelStartupService {
     }
   }
 
-  private async getAudioMetadata(audioBuffer: Buffer): Promise<{ seconds: number; waveform: Uint8Array }> {
-    try {
-      this.logger.debug('Decoding audio buffer for metadata extraction...');
-      const audioData = await audioDecode(audioBuffer);
-
-      // Extract duration
-      const seconds = Math.ceil(audioData.duration);
-      this.logger.debug(`Audio duration: ${seconds} seconds`);
-
-      // Generate waveform
-      const samples = audioData.getChannelData(0);
-      const waveformLength = 64;
-      const samplesPerWaveform = Math.max(1, Math.floor(samples.length / waveformLength));
-
-      // First pass: calculate raw averages
-      const rawValues: number[] = [];
-      for (let i = 0; i < waveformLength; i++) {
-        const start = i * samplesPerWaveform;
-        const end = start + samplesPerWaveform;
-        let sum = 0;
-        for (let j = start; j < end && j < samples.length; j++) {
-          sum += Math.abs(samples[j]);
-        }
-        const avg = sum / samplesPerWaveform;
-        rawValues.push(avg);
-      }
-
-      // Find max value for normalization
-      const maxValue = Math.max(...rawValues);
-
-      // Second pass: normalize to 0-100 range
-      const waveform = new Uint8Array(waveformLength);
-      if (maxValue > 0) {
-        for (let i = 0; i < waveformLength; i++) {
-          const normalized = Math.floor((rawValues[i] / maxValue) * 100);
-          waveform[i] = rawValues[i] > 0 ? Math.max(5, Math.min(100, normalized)) : 0;
-        }
-      } else {
-        waveform.fill(50);
-      }
-
-      this.logger.debug(`Generated waveform with ${waveform.length} values`);
-
-      return { seconds, waveform };
-    } catch (error) {
-      this.logger.warn(`Failed to extract audio metadata: ${error.message}, using defaults`);
-      const defaultWaveform = new Uint8Array(64);
-      defaultWaveform.fill(50);
-      return { seconds: 1, waveform: defaultWaveform };
-    }
-  }
-
   public async audioWhatsapp(data: SendAudioDto, file?: any, isIntegration = false) {
     const mediaData: SendAudioDto = { ...data };
 
@@ -3535,9 +3482,8 @@ export class BaileysStartupService extends ChannelStartupService {
       const convert = await this.processAudio(mediaData.audio);
 
       if (Buffer.isBuffer(convert)) {
-        const { seconds, waveform } = await this.getAudioMetadata(convert);
-
-        const messageContent = { audio: convert, ptt: true, mimetype: 'audio/ogg; codecs=opus', seconds, waveform };
+        // Baileys rc13 calcula seconds/waveform nativamente (getAudioDuration/getAudioWaveform via audio-decode) quando ausentes
+        const messageContent = { audio: convert, ptt: true, mimetype: 'audio/ogg; codecs=opus' };
 
         const result = this.sendMessageWithTyping<AnyMessageContent>(
           data.number,
@@ -3553,20 +3499,14 @@ export class BaileysStartupService extends ChannelStartupService {
     }
 
     const audioBuffer = isURL(data.audio) ? { url: data.audio } : Buffer.from(data.audio, 'base64');
-    let metadata: { seconds: number; waveform: Uint8Array } | undefined;
 
-    // Only generate waveform for buffers, not URLs
-    if (Buffer.isBuffer(audioBuffer)) {
-      metadata = await this.getAudioMetadata(audioBuffer);
-    }
-
+    // seconds/waveform são calculados nativamente pelo Baileys rc13 (inclusive para URLs)
     return await this.sendMessageWithTyping<AnyMessageContent>(
       data.number,
       {
         audio: audioBuffer,
         ptt: true,
         mimetype: 'audio/ogg; codecs=opus',
-        ...(metadata && { seconds: metadata.seconds, waveform: metadata.waveform }),
       },
       { presence: 'recording', delay: data?.delay },
       isIntegration,
