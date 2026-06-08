@@ -122,6 +122,12 @@ docker pull evoapicloud/evolution-api:latest
 docker run -p 8080:8080 --env-file .env evoapicloud/evolution-api:latest
 ```
 
+The published image expects an external database. For a local all-in-one development stack with PostgreSQL and Redis, use:
+
+```bash
+docker compose -f docker-compose.local.yaml up --build
+```
+
 ---
 
 ## Architecture

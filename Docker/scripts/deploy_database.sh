@@ -2,6 +2,28 @@
 
 source ./Docker/scripts/env_functions.sh
 
+run_with_retry() {
+    local description="$1"
+    shift
+
+    local max_retries="${DATABASE_DEPLOY_MAX_RETRIES:-30}"
+    local retry_delay="${DATABASE_DEPLOY_RETRY_DELAY_SECONDS:-3}"
+    local attempt=1
+
+    until "$@"; do
+        if [ "$attempt" -ge "$max_retries" ]; then
+            echo "$description failed after $attempt attempts"
+            return 1
+        fi
+
+        echo "$description failed. Waiting ${retry_delay}s before retrying (${attempt}/${max_retries})..."
+        attempt=$((attempt + 1))
+        sleep "$retry_delay"
+    done
+
+    return 0
+}
+
 if [ "$DOCKER_ENV" != "true" ]; then
     export_env_vars
 fi
@@ -10,10 +32,7 @@ if [[ "$DATABASE_PROVIDER" == "postgresql" || "$DATABASE_PROVIDER" == "mysql" ||
     export DATABASE_URL
     echo "Deploying migrations for $DATABASE_PROVIDER"
     echo "Database URL: $DATABASE_URL"
-    # rm -rf ./prisma/migrations
-    # cp -r ./prisma/$DATABASE_PROVIDER-migrations ./prisma/migrations
-    npm run db:deploy
-    if [ $? -ne 0 ]; then
+    if ! run_with_retry "Database migration" npm run db:deploy; then
         echo "Migration failed"
         exit 1
     else
